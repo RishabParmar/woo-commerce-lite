@@ -1,0 +1,11 @@
+{
+  "name": "woo-commerce-lite",
+  "version": "1.0.0",
+  "description": "Woo commerce integration with Go Online",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "author": "Rishab Parmar",
+  "license": "ISC"
+}
