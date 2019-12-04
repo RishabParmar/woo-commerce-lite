@@ -1,0 +1,1 @@
+console.log("This is woo commerce test JS file!!!!");
