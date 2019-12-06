@@ -3,6 +3,7 @@ const fs = require('fs');
 const rx = require('rxjs');
 const operators = require('rxjs/operators');
 const consumer_credentials = require('./credentials');
+const { rxToStream } = require('rxjs-stream');
 const orderArray = []
 
 // function fetchOrderList1(iterations){
@@ -102,58 +103,100 @@ function validateClient(client_credentials){
     return wooCommerceToken;
 }
 
-async function fetchOrderListWithParameters(client_credentials, start_date, end_date){
-    // Creating the authGet() from the credentials received
-    const wooCommerceCredentials = validateClient(client_credentials);
-    const authGet = new wooCommerceRestAPI(wooCommerceCredentials);
-    var orderArray = [];
-    var counter = 1;
-    var data_length = 0;
-    const per_page_limit = 20;
-    try{        
-        do{
-            const data = await authGet.get('orders',{
-                page: counter,
-                per_page: per_page_limit,                
-                after: start_date,
-                before: end_date,
-            });
-            /*  const interval_buffer = rx.interval(20000);
-                const wooCommerce_robot = ___.pipe({
-                operators.buffer(interval_buffer);
-            });
-            */
-            console.log(data.status);
-            if (data.status == 200){
-                 data.data.forEach(order => orderArray.push(order));
-                //orderArray.concat(data.data);
-                console.log("Successfully fetched orders:", data.data.length);
-                data_length = data.data.length;
-                counter++;
-            }else{
-                console.log("error code:", data.status);
-                break;
-            }
-        }while(data_length === per_page_limit);
-        console.log('total orders Fetched: ', orderArray.length);
-    }catch(e){
-        console.log(e);
+// async function fetchOrderListWithParameters(client_credentials, start_date, end_date){
+//     // Creating the authGet() from the credentials received
+//     const wooCommerceCredentials = validateClient(client_credentials);
+//     const authGet = new wooCommerceRestAPI(wooCommerceCredentials);
+//     var orderArray = [];
+//     var counter = 1;
+//     var data_length = 0;
+//     const per_page_limit = 20;
+//     try{        
+//         do{
+//             const data = await authGet.get('orders',{
+//                 page: counter,
+//                 per_page: per_page_limit,                
+//                 after: start_date,
+//                 before: end_date,
+//             });
+//             /*  const interval_buffer = rx.interval(20000);
+//                 const wooCommerce_robot = ___.pipe({
+//                 operators.buffer(interval_buffer);
+//             });
+//             */
+//             console.log(data.status);
+//             if (data.status == 200){
+//                  data.data.forEach(order => orderArray.push(order));
+//                 //orderArray.concat(data.data);
+//                 console.log("Successfully fetched orders:", data.data.length);
+//                 data_length = data.data.length;
+//                 counter++;
+//             }else{
+//                 console.log("error code:", data.status);
+//                 break;
+//             }
+//         }while(data_length === per_page_limit);
+//         console.log('total orders Fetched: ', orderArray.length);
+//     }catch(e){
+//         console.log(e);
+//     }
+//     // console.log("The order list :----------------------->", orderArray);
+//     return orderArray;
+// }
+
+function fetchOrders({ clientCredentials = null, startDate = null, endDate = null, perPageLimit = 100 }) {
+    if (!clientCredentials || !startDate || !endDate) {
+        throw new Error('Required basic params missing');
     }
-    // console.log("The order list :----------------------->", orderArray);
-    return orderArray;
+    const wooCommerceCredentials = validateClient(clientCredentials);
+    const authGet = new wooCommerceRestAPI(wooCommerceCredentials);
+    return function fetchOrdersByParams$(page = 1) {
+        return  rx.from(authGet.get('orders', {
+            page,
+            per_page: perPageLimit,
+            after: startDate,
+            before: endDate,
+        })).pipe(
+            operators.filter(response => response.status === 200),
+            operators.map(response => response.data)
+        );
+    }
 }
 
-function writeOrderListToFile(orderArray){
-    return new Promise((resolve, reject) => {
-        fs.writeFile('data.json', JSON.stringify(orderArray), (res, err) =>{
-            if(err){
-                reject("Error while writing to a file:", err);
-            }
-            console.log("Done writing");
-            resolve();
-        })
-    })
-}
+// function fetchOrderListObservables(client_credentials, start_date, end_date){
+//     // Creating the authGet() from the credentials received
+//     const wooCommerceCredentials = validateClient(client_credentials);
+//     const authGet = new wooCommerceRestAPI(wooCommerceCredentials);
+//     var orderArray = [];
+//     var data_length = 0;
+//     const per_page_limit = 20;
+
+//     // Fetching Orders:
+//     var obsvervable$ = rx.from(authGet.get('orders', {
+//         page: 1,
+//         per_page: per_page_limit,
+//         after: start_date,
+//         before: end_date,
+//     }));
+
+//     // obsvervable$.subscribe(console.log);
+//     console.log('Before Creating');
+
+//     return obsvervable$;
+// // obsvervable.subscribe(console.log);
+// }
+
+// function writeOrderListToFile(orderArray){
+//     return new Promise((resolve, reject) => {
+//         fs.writeFile('data.json', JSON.stringify(orderArray), (res, err) =>{
+//             if(err){
+//                 reject("Error while writing to a file:", err);
+//             }
+//             console.log("Done writing");
+//             resolve();
+//         })
+//     })
+// }
 
 function transformOrderList(orderlist) {
     const transformed = [];
@@ -249,14 +292,40 @@ function transformOrderList(orderlist) {
 
 // transformedList = transformOrderList(fetchOrderList());
 
-async function gettingOrdersAndWritingToFileWithParameters(client_credentials, start_date, end_date){
-    var orderArray = await fetchOrderListWithParameters(client_credentials, start_date, end_date);
-    await writeOrderListToFile(orderArray);
-    console.log("End of method File with Parameters");
+// async function gettingOrdersAndWritingToFileWithParameters(client_credentials, start_date, end_date){
+//     var orderArray = await fetchOrderListWithParameters(client_credentials, start_date, end_date);
+//     await writeOrderListToFile(orderArray);
+//     console.log("End of method File with Parameters");
+// }
+
+// gettingOrdersAndWritingToFileWithParameters(
+//     {consumer_key: consumer_credentials.consumer_key, 
+//     consumer_secret:consumer_credentials.consumer_secret}, 
+//     '2019-11-01T00:00:00Z', '2019-11-05T00:00:00Z'
+// );
+
+function gettingOrders(clientCredentials, startDate, endDate, perPageLimit = 100){
+    var pageNumber = 1;
+    var fsStream = fs.createWriteStream('data.json', 'utf-8');
+    var fetcher = fetchOrders({ clientCredentials, startDate, endDate, perPageLimit });
+    var initialOrders$ = fetcher(pageNumber++);
+    var allOrder$ = initialOrders$
+        .pipe(
+            operators.expand(orders => {
+                return  orders.length === perPageLimit ? fetcher(pageNumber++) : rx.empty();
+            })
+        );
+    
+    rxToStream(allOrder$.pipe(
+        operators.concatMap(o => o),
+        operators.toArray(),
+        operators.map(val => JSON.stringify(val))
+    )).pipe(fsStream);
 }
 
-gettingOrdersAndWritingToFileWithParameters(
-    {consumer_key: consumer_credentials.consumer_key, 
-    consumer_secret:consumer_credentials.consumer_secret}, 
+gettingOrders({
+    consumer_key: consumer_credentials.consumer_key,
+    consumer_secret: consumer_credentials.consumer_secret
+},
     '2019-11-01T00:00:00Z', '2019-11-05T00:00:00Z'
 );
